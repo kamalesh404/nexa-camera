@@ -36,12 +36,19 @@ class CameraLabViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun exportJson() = viewModelScope.launch(Dispatchers.IO) {
-        val cameraJson = JSONArray(); _state.value.cameras.forEach { cameraJson.put(it.toJson()) }
-        val root = JSONObject().put("schemaVersion", 1).put("generatedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())).put("device", _state.value.deviceSummary).put("cameras", cameraJson)
-        val resolver = getApplication<Application>().contentResolver
-        val values = android.content.ContentValues().apply { put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "honor90_camera_report_${System.currentTimeMillis()}.json"); put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/json"); put(android.provider.MediaStore.Downloads.IS_PENDING, 1) }
-        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-        if (uri != null) { resolver.openOutputStream(uri)?.use { it.write(root.toString(2).toByteArray()) }; values.clear(); values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0); resolver.update(uri, values, null, null); _state.value = _state.value.copy(message = "Capability report exported to Downloads.") } else _state.value = _state.value.copy(message = "Could not create report file.")
+        try {
+            val cameraJson = JSONArray(); _state.value.cameras.forEach { cameraJson.put(it.toJson()) }
+            val root = JSONObject().put("schemaVersion", 1).put("generatedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())).put("device", _state.value.deviceSummary).put("cameras", cameraJson)
+            val resolver = getApplication<Application>().contentResolver
+            val values = android.content.ContentValues().apply { put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "honor90_camera_report_${System.currentTimeMillis()}.json"); put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/json"); put(android.provider.MediaStore.Downloads.IS_PENDING, 1) }
+            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            check(uri != null) { "Android could not create a Downloads file" }
+            resolver.openOutputStream(uri)?.use { it.write(root.toString(2).toByteArray()) } ?: error("Android could not open the report file")
+            values.clear(); values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0); resolver.update(uri, values, null, null)
+            _state.value = _state.value.copy(message = "Capability report exported to Downloads.")
+        } catch (error: Exception) {
+            _state.value = _state.value.copy(message = "Export failed safely: ${error.javaClass.simpleName}: ${error.message ?: "unknown error"}")
+        }
     }
 }
 
