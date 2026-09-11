@@ -2,6 +2,7 @@ package com.nexa.camera.lab
 
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.util.Range
 import android.util.Size
 import java.util.Locale

@@ -40,6 +40,7 @@ private fun NexaCameraApp() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CameraLabScreen() {
     val vm: CameraLabViewModel = androidx.lifecycle.viewmodel.compose.viewModel()

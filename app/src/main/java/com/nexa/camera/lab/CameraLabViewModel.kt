@@ -5,6 +5,7 @@ import android.hardware.camera2.CameraManager
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexa.camera.NativeBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +30,8 @@ class CameraLabViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val reports = manager.cameraIdList.mapNotNull { id -> runCatching { CameraReportReader.read(manager, id) }.getOrNull() }
             val d = getApplication<Application>(); val dm = d.resources.displayMetrics
-            _state.value = LabState(false, reports, "${reports.size} camera(s) inspected. Export the report after connecting the physical HONOR 90.", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · ${android.os.Build.DEVICE} · Android ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}) · ABI ${android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"} · RAM ${d.getSystemService(android.app.ActivityManager::class.java).totalMem / 1_000_000} MB · ${dm.densityDpi} dpi", runCatching { NativeBridge.nativeBuildInfo() }.getOrDefault("Native layer unavailable"))
+            val memoryInfo = android.app.ActivityManager.MemoryInfo(); d.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(memoryInfo)
+            _state.value = LabState(false, reports, "${reports.size} camera(s) inspected. Export the report after connecting the physical HONOR 90.", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · ${android.os.Build.DEVICE} · Android ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT}) · ABI ${android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"} · RAM ${memoryInfo.totalMem / 1_000_000} MB · ${dm.densityDpi} dpi", runCatching { NativeBridge.nativeBuildInfo() }.getOrDefault("Native layer unavailable"))
         } catch (e: Exception) { _state.value = _state.value.copy(scanning = false, message = "Camera Lab error: ${e.message}") }
     }
 
