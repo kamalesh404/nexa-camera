@@ -52,4 +52,4 @@ class CameraLabViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-private fun CameraReport.toJson() = JSONObject().apply { CameraReport::class.java.declaredFields.forEach { f -> f.isAccessible = true; put(f.name, f.get(this)?.toString() ?: JSONObject.NULL) } }
+private fun CameraReport.toJson() = JSONObject().apply { CameraReport::class.java.declaredFields.forEach { f -> f.isAccessible = true; put(f.name, f.get(this@toJson)?.toString() ?: JSONObject.NULL) } }
