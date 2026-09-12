@@ -72,6 +72,7 @@ private fun CameraCard(camera: com.nexa.camera.lab.CameraReport) {
         Text("Dynamic range: ${camera.dynamicRangeProfiles}  |  Color spaces: ${camera.colorSpaces}")
         Text("JPEG sizes: ${camera.jpegSizes.size}, YUV sizes: ${camera.yuvSizes.size}, RAW sizes: ${camera.rawSizes.size}", style = MaterialTheme.typography.bodySmall)
         Text("High-resolution JPEG: ${camera.highResolutionJpegSizes}  |  High-resolution YUV: ${camera.highResolutionYuvSizes}", style = MaterialTheme.typography.bodySmall)
+        Text("MAXIMUM_RESOLUTION JPEG: ${camera.maximumResolutionJpegSizes}  |  YUV: ${camera.maximumResolutionYuvSizes}  |  RAW: ${camera.maximumResolutionRawSizes}", style = MaterialTheme.typography.bodySmall)
         Text("Capabilities: ${camera.availableCapabilities}  |  Hardware level: ${camera.hardwareLevel}", style = MaterialTheme.typography.bodySmall)
         Text("Camera2 keys inspected: ${camera.allCharacteristics.count { it == '=' }}", style = MaterialTheme.typography.bodySmall)
         if (camera.physicalCameraIds.isNotEmpty()) Text("Physical IDs: ${camera.physicalCameraIds}")
