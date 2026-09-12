@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.nexa.camera.lab.CameraLabViewModel
+import com.nexa.camera.camera2.CameraPreviewScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,10 +46,12 @@ private fun NexaCameraApp() {
 private fun CameraLabScreen() {
     val vm: CameraLabViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val state by vm.state.collectAsState()
+    var showPreview by remember { mutableStateOf(false) }
+    if (showPreview) { CameraPreviewScreen { showPreview = false }; return }
     Scaffold(topBar = { TopAppBar(title = { Text("NEXA CAMERA LAB") }) }) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { Text("HONOR 90 diagnostic subsystem", style = MaterialTheme.typography.titleMedium); Text(state.deviceSummary, style = MaterialTheme.typography.bodySmall) }
-            item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(onClick = vm::scan) { Text(if (state.scanning) "Scanning…" else "Rescan") }; OutlinedButton(onClick = vm::exportJson, enabled = state.cameras.isNotEmpty()) { Text("Export JSON") } } }
+            item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(onClick = vm::scan) { Text(if (state.scanning) "Scanning…" else "Rescan") }; OutlinedButton(onClick = vm::exportJson, enabled = state.cameras.isNotEmpty()) { Text("Export JSON") }; OutlinedButton(onClick = { showPreview = true }) { Text("Preview") } } }
             item { if (state.message.isNotBlank()) Text(state.message, color = MaterialTheme.colorScheme.primary) }
             items(state.cameras) { camera -> CameraCard(camera) }
             item { Text("Native engine", style = MaterialTheme.typography.titleSmall); Text(state.nativeInfo, style = MaterialTheme.typography.bodySmall) }
