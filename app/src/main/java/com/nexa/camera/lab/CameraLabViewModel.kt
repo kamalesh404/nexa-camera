@@ -17,7 +17,7 @@ import java.util.Date
 import java.util.Locale
 
 data class LabState(val scanning: Boolean = false, val cameras: List<CameraReport> = emptyList(), val message: String = "", val deviceSummary: String = "", val nativeInfo: String = "")
-data class CameraReport(val id: String, val classification: String, val lensFacing: String, val sensorOrientation: Int, val activeArray: String, val pixelArray: String, val physicalCameraIds: Set<String>, val focalLengths: String, val apertures: String, val focusDistance: String, val opticalStabilization: String, val largestJpeg: String, val largestYuv: String, val largestRaw: String, val rawSupported: Boolean, val flashAvailable: Boolean, val torchAvailable: Boolean, val isoRange: String, val exposureRange: String, val evRange: String, val evStep: String, val afModes: String, val aeModes: String, val awbModes: String, val fpsRanges: String, val videoConfigurations: String, val dynamicRangeProfiles: String, val colorSpaces: String, val jpegSizes: List<String>, val yuvSizes: List<String>, val rawSizes: List<String>)
+data class CameraReport(val id: String, val classification: String, val lensFacing: String, val sensorOrientation: Int, val activeArray: String, val pixelArray: String, val physicalCameraIds: Set<String>, val focalLengths: String, val apertures: String, val focusDistance: String, val opticalStabilization: String, val largestJpeg: String, val largestYuv: String, val largestRaw: String, val rawSupported: Boolean, val flashAvailable: Boolean, val torchAvailable: Boolean, val isoRange: String, val exposureRange: String, val evRange: String, val evStep: String, val afModes: String, val aeModes: String, val awbModes: String, val fpsRanges: String, val videoConfigurations: String, val dynamicRangeProfiles: String, val colorSpaces: String, val jpegSizes: List<String>, val yuvSizes: List<String>, val rawSizes: List<String>, val highResolutionJpegSizes: List<String>, val highResolutionYuvSizes: List<String>, val availableCapabilities: String, val hardwareLevel: String, val minFrameDurations: String, val stallDurations: String, val allCharacteristics: String)
 
 class CameraLabViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(LabState())
@@ -52,4 +52,4 @@ class CameraLabViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-private fun CameraReport.toJson() = JSONObject().apply { CameraReport::class.java.declaredFields.forEach { f -> f.isAccessible = true; put(f.name, f.get(this@toJson)?.toString() ?: JSONObject.NULL) } }
+private fun CameraReport.toJson() = JSONObject().apply { CameraReport::class.java.declaredFields.filter { !it.isSynthetic && !java.lang.reflect.Modifier.isStatic(it.modifiers) }.forEach { f -> f.isAccessible = true; put(f.name, f.get(this@toJson)?.toString() ?: JSONObject.NULL) } }
