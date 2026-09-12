@@ -18,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class Camera2CaptureController(private val context: Context, private val textureView: TextureView, private val onStatus: (String) -> Unit) {
+class Camera2CaptureController(private val context: Context, private val textureView: TextureView, private val cameraId: String, private val onStatus: (String) -> Unit) {
     private val manager = context.getSystemService(CameraManager::class.java)
     private val thread = HandlerThread("NexaCamera2").apply { start() }
     private val handler = Handler(thread.looper)
@@ -31,9 +31,8 @@ class Camera2CaptureController(private val context: Context, private val texture
         if (!textureView.isAvailable) { textureView.surfaceTextureListener = listener; return }
         handler.post {
             try {
-                val id = manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK } ?: manager.cameraIdList.first()
                 if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) { onStatus("Camera permission is required"); return@post }
-                manager.openCamera(id, callback, handler)
+                manager.openCamera(cameraId, callback, handler)
             } catch (e: Exception) { onStatus("Camera open failed: ${e.message}") }
         }
     }
@@ -63,7 +62,7 @@ class Camera2CaptureController(private val context: Context, private val texture
             imageReader.setOnImageAvailableListener({ source -> source.acquireNextImage()?.use { image -> saveJpeg(image.planes[0].buffer) } }, handler)
         }
         device.createCaptureSession(listOf(preview, reader!!.surface), object : CameraCaptureSession.StateCallback() {
-            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); onStatus("Camera 0 preview ready") }
+            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); onStatus("Camera $cameraId preview ready") }
             override fun onConfigureFailed(value: CameraCaptureSession) { onStatus("Camera session configuration failed") }
         }, handler)
     }
