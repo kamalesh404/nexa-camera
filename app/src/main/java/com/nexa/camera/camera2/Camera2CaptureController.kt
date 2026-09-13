@@ -19,10 +19,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class Camera2CaptureController(private val context: Context, private val textureView: TextureView, private val cameraId: String, private val onStatus: (String) -> Unit) {
+class Camera2CaptureController(private val context: Context, private val textureView: TextureView, initialCameraId: String, private val onStatus: (String) -> Unit) {
     private val manager = context.getSystemService(CameraManager::class.java)
     private val thread = HandlerThread("NexaCamera2").apply { start() }
     private val handler = Handler(thread.looper)
+    private var cameraId = initialCameraId
     private var camera: CameraDevice? = null
     private var session: CameraCaptureSession? = null
     private var reader: ImageReader? = null
@@ -37,14 +38,29 @@ class Camera2CaptureController(private val context: Context, private val texture
         handler.post {
             try {
                 if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) { status("Camera permission is required"); return@post }
-                manager.openCamera(cameraId, callback, handler)
+                openInternal()
             } catch (e: Exception) { status("Camera open failed: ${e.message}") }
+        }
+    }
+
+    fun switchCamera(newCameraId: String) {
+        if (newCameraId == cameraId && camera != null) return
+        handler.post {
+            closeDeviceOnly()
+            cameraId = newCameraId
+            if (!closed) openInternal()
         }
     }
 
     fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { status("Capture failed: ${e.message}") } } }
 
-    fun close() { closed = true; handler.post { session?.close(); camera?.close(); reader?.close(); session = null; camera = null; reader = null }; thread.quitSafely() }
+    fun close() { closed = true; handler.post { closeDeviceOnly() }; thread.quitSafely() }
+
+    private fun openInternal() {
+        try { manager.openCamera(cameraId, callback, handler) } catch (e: Exception) { status("Camera $cameraId open failed: ${e.message}") }
+    }
+
+    private fun closeDeviceOnly() { session?.close(); camera?.close(); reader?.close(); session = null; camera = null; reader = null; previewRequest = null }
 
     private val listener = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) { open() }
