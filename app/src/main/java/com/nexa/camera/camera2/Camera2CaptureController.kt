@@ -28,6 +28,9 @@ class Camera2CaptureController(private val context: Context, private val texture
     private var session: CameraCaptureSession? = null
     private var reader: ImageReader? = null
     private var previewRequest: CaptureRequest? = null
+    private var manualMode = false
+    private var manualIso = 100
+    private var manualExposureNs = 33_333_333L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var closed = false
 
@@ -52,7 +55,11 @@ class Camera2CaptureController(private val context: Context, private val texture
         }
     }
 
-    fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { status("Capture failed: ${e.message}") } } }
+    fun setManualMode(enabled: Boolean) { handler.post { manualMode = enabled; updatePreview() } }
+    fun setIso(value: Int) { handler.post { manualIso = value.coerceIn(50, 204800); updatePreview() } }
+    fun setExposureNs(value: Long) { handler.post { manualExposureNs = value.coerceIn(1_000_000L, 1_000_000_000L); updatePreview() } }
+
+    fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); applyControls(this); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { status("Capture failed: ${e.message}") } } }
 
     fun close() { closed = true; handler.post { closeDeviceOnly() }; thread.quitSafely() }
 
@@ -87,10 +94,22 @@ class Camera2CaptureController(private val context: Context, private val texture
             imageReader.setOnImageAvailableListener({ source -> source.acquireNextImage()?.use { image -> saveJpeg(image.planes[0].buffer) } }, handler)
         }
         device.createCaptureSession(listOf(preview, reader!!.surface), object : CameraCaptureSession.StateCallback() {
-            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); val afModes = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet().orEmpty(); if (afModes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); status("Camera $cameraId preview ready · ${jpegSize.width}×${jpegSize.height}") }
+            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); val afModes = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet().orEmpty(); if (afModes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE); applyControls(this) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); status("Camera $cameraId preview ready · ${jpegSize.width}×${jpegSize.height}") }
             override fun onConfigureFailed(value: CameraCaptureSession) { status("Camera $cameraId session configuration failed") }
         }, handler)
     }
+
+    private fun applyControls(builder: CaptureRequest.Builder) {
+        if (!manualMode) { builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON); return }
+        val c = manager.getCameraCharacteristics(cameraId)
+        val isoRange = c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+        val exposureRange = c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+        builder.set(CaptureRequest.SENSOR_SENSITIVITY, manualIso.coerceIn(isoRange?.lower ?: 50, isoRange?.upper ?: 204800))
+        builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, manualExposureNs.coerceIn(exposureRange?.lower ?: 1_000_000L, exposureRange?.upper ?: 1_000_000_000L))
+    }
+
+    private fun updatePreview() { val current = session ?: return; val device = camera ?: return; val texture = textureView.surfaceTexture ?: return; val preview = Surface(texture); try { previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); applyControls(this) }.build(); current.setRepeatingRequest(previewRequest!!, null, handler); status(if (manualMode) "PRO · ISO $manualIso · 1/${(1_000_000_000L / manualExposureNs).coerceAtLeast(1)}s" else "AUTO") } catch (e: Exception) { status("Manual control unavailable: ${e.message}") } }
 
     private fun saveJpeg(buffer: java.nio.ByteBuffer) {
         val values = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, "NEXA_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"); put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg"); put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Nexa Camera"); put(MediaStore.Images.Media.IS_PENDING, 1) }

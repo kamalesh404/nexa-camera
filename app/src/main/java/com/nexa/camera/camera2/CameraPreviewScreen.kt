@@ -14,6 +14,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 @Composable
 fun CameraPreviewScreen(onBack: () -> Unit) {
     var selectedCamera by remember { mutableStateOf("0") }
+    var proMode by remember { mutableStateOf(false) }
+    var iso by remember { mutableStateOf(100) }
+    var shutterIndex by remember { mutableStateOf(1) }
     var controller by remember { mutableStateOf<Camera2CaptureController?>(null) }
     var status by remember { mutableStateOf("Opening Camera2 preview…") }
     DisposableEffect(Unit) { onDispose { controller?.close(); controller = null } }
@@ -36,6 +39,15 @@ fun CameraPreviewScreen(onBack: () -> Unit) {
                         FilterChip(selected = selectedCamera == "0", onClick = { selectedCamera = "0"; controller?.switchCamera("0") }, label = { Text("Rear") })
                         Button(onClick = { controller?.capture() }, modifier = Modifier.size(width = 150.dp, height = 54.dp)) { Text("SHUTTER") }
                         FilterChip(selected = selectedCamera == "1", onClick = { selectedCamera = "1"; controller?.switchCamera("1") }, label = { Text("Front") })
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = proMode, onClick = { proMode = !proMode; controller?.setManualMode(proMode) }, label = { Text(if (proMode) "PRO" else "AUTO") })
+                        if (proMode) {
+                            TextButton(onClick = { iso = (iso / 2).coerceAtLeast(50); controller?.setIso(iso) }) { Text("ISO− $iso") }
+                            TextButton(onClick = { iso = (iso * 2).coerceAtMost(204800); controller?.setIso(iso) }) { Text("ISO+") }
+                            val shutters = listOf(250_000_000L, 33_333_333L, 8_000_000L, 2_000_000L)
+                            TextButton(onClick = { shutterIndex = (shutterIndex + 1) % shutters.size; controller?.setExposureNs(shutters[shutterIndex]) }) { Text("Shutter") }
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(onClick = onBack) { Text("Close preview") }
