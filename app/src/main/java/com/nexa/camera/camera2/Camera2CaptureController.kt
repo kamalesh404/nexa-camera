@@ -31,6 +31,12 @@ class Camera2CaptureController(private val context: Context, private val texture
     private var manualMode = false
     private var manualIso = 100
     private var manualExposureNs = 33_333_333L
+    private var exposureCompensation = 0
+    private var whiteBalanceMode = CaptureRequest.CONTROL_AWB_MODE_AUTO
+    private var manualFocus = false
+    private var focusDistance = 0f
+    private var aeLock = false
+    private var awbLock = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var closed = false
 
@@ -58,6 +64,12 @@ class Camera2CaptureController(private val context: Context, private val texture
     fun setManualMode(enabled: Boolean) { handler.post { manualMode = enabled; updatePreview() } }
     fun setIso(value: Int) { handler.post { manualIso = value.coerceIn(50, 204800); updatePreview() } }
     fun setExposureNs(value: Long) { handler.post { manualExposureNs = value.coerceIn(1_000_000L, 1_000_000_000L); updatePreview() } }
+    fun setExposureCompensation(value: Int) { handler.post { exposureCompensation = value.coerceIn(-6, 6); updatePreview() } }
+    fun setWhiteBalance(mode: Int) { handler.post { whiteBalanceMode = mode; updatePreview() } }
+    fun setManualFocus(enabled: Boolean) { handler.post { manualFocus = enabled; updatePreview() } }
+    fun setFocusDistance(value: Float) { handler.post { focusDistance = value.coerceIn(0f, 20f); updatePreview() } }
+    fun setAeLock(locked: Boolean) { handler.post { aeLock = locked; updatePreview() } }
+    fun setAwbLock(locked: Boolean) { handler.post { awbLock = locked; updatePreview() } }
 
     fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); applyControls(this); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { status("Capture failed: ${e.message}") } } }
 
@@ -100,11 +112,29 @@ class Camera2CaptureController(private val context: Context, private val texture
     }
 
     private fun applyControls(builder: CaptureRequest.Builder) {
-        if (!manualMode) { builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON); return }
         val c = manager.getCameraCharacteristics(cameraId)
+        val aeModes = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES)?.toSet().orEmpty()
+        val awbModes = c.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)?.toSet().orEmpty()
+        val afModes = c.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet().orEmpty()
+        val evRange = c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)
+        if (evRange != null) builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, exposureCompensation.coerceIn(evRange.lower, evRange.upper))
+        if (awbModes.contains(whiteBalanceMode)) builder.set(CaptureRequest.CONTROL_AWB_MODE, whiteBalanceMode)
+        if (c.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true) builder.set(CaptureRequest.CONTROL_AE_LOCK, aeLock)
+        if (c.get(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE) == true) builder.set(CaptureRequest.CONTROL_AWB_LOCK, awbLock)
+        if (manualFocus && afModes.contains(CaptureRequest.CONTROL_AF_MODE_OFF)) {
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+            val minFocus = c.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
+            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance.coerceIn(0f, minFocus))
+        } else if (afModes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+        }
+        if (!manualMode) {
+            if (aeModes.contains(CaptureRequest.CONTROL_AE_MODE_ON)) builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+            return
+        }
         val isoRange = c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
         val exposureRange = c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+        if (aeModes.contains(CaptureRequest.CONTROL_AE_MODE_OFF)) builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         builder.set(CaptureRequest.SENSOR_SENSITIVITY, manualIso.coerceIn(isoRange?.lower ?: 50, isoRange?.upper ?: 204800))
         builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, manualExposureNs.coerceIn(exposureRange?.lower ?: 1_000_000L, exposureRange?.upper ?: 1_000_000_000L))
     }

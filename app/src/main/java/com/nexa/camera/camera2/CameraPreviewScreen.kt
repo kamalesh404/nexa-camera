@@ -1,5 +1,6 @@
 package com.nexa.camera.camera2
 
+import android.hardware.camera2.CaptureRequest
 import android.view.TextureView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,12 @@ fun CameraPreviewScreen(onBack: () -> Unit) {
     var proMode by remember { mutableStateOf(false) }
     var iso by remember { mutableStateOf(100) }
     var shutterIndex by remember { mutableStateOf(1) }
+    var ev by remember { mutableStateOf(0) }
+    var wbIndex by remember { mutableStateOf(0) }
+    var manualFocus by remember { mutableStateOf(false) }
+    var focusDistance by remember { mutableStateOf(0f) }
+    var aeLock by remember { mutableStateOf(false) }
+    var awbLock by remember { mutableStateOf(false) }
     var controller by remember { mutableStateOf<Camera2CaptureController?>(null) }
     var status by remember { mutableStateOf("Opening Camera2 preview…") }
     DisposableEffect(Unit) { onDispose { controller?.close(); controller = null } }
@@ -48,6 +55,30 @@ fun CameraPreviewScreen(onBack: () -> Unit) {
                             val shutters = listOf(250_000_000L, 33_333_333L, 8_000_000L, 2_000_000L)
                             TextButton(onClick = { shutterIndex = (shutterIndex + 1) % shutters.size; controller?.setExposureNs(shutters[shutterIndex]) }) { Text("Shutter") }
                         }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { ev = (ev + 1).coerceAtMost(3); controller?.setExposureCompensation(ev) }) { Text("EV +$ev") }
+                        TextButton(onClick = { ev = if (ev <= -3) 3 else ev - 1; controller?.setExposureCompensation(ev) }) { Text("EV−") }
+                        val wbModes = listOf(
+                            CaptureRequest.CONTROL_AWB_MODE_AUTO to "WB Auto",
+                            CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT to "WB Tung",
+                            CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT to "WB Fluor",
+                            CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT to "WB Day",
+                            CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT to "WB Cloud"
+                        )
+                        TextButton(onClick = { wbIndex = (wbIndex + 1) % wbModes.size; controller?.setWhiteBalance(wbModes[wbIndex].first) }) { Text(wbModes[wbIndex].second) }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = manualFocus, onClick = { manualFocus = !manualFocus; controller?.setManualFocus(manualFocus) }, label = { Text(if (manualFocus) "Focus Manual" else "Focus Auto") })
+                        if (manualFocus) {
+                            TextButton(onClick = { focusDistance = (focusDistance - 0.5f).coerceAtLeast(0f); controller?.setFocusDistance(focusDistance) }) { Text("Focus −") }
+                            Text("${"%.1f".format(focusDistance)}m", color = Color.White)
+                            TextButton(onClick = { focusDistance = (focusDistance + 0.5f).coerceAtMost(20f); controller?.setFocusDistance(focusDistance) }) { Text("Focus +") }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        FilterChip(selected = aeLock, onClick = { aeLock = !aeLock; controller?.setAeLock(aeLock) }, label = { Text(if (aeLock) "AE Locked" else "Lock AE") })
+                        FilterChip(selected = awbLock, onClick = { awbLock = !awbLock; controller?.setAwbLock(awbLock) }, label = { Text(if (awbLock) "AWB Locked" else "Lock WB") })
                     }
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(onClick = onBack) { Text("Close preview") }
