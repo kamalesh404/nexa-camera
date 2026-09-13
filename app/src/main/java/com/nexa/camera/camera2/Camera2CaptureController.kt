@@ -11,6 +11,7 @@ import android.hardware.camera2.CaptureRequest
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.provider.MediaStore
 import android.view.Surface
 import android.view.TextureView
@@ -26,20 +27,24 @@ class Camera2CaptureController(private val context: Context, private val texture
     private var session: CameraCaptureSession? = null
     private var reader: ImageReader? = null
     private var previewRequest: CaptureRequest? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var closed = false
+
+    private fun status(message: String) { if (!closed) mainHandler.post { if (!closed) onStatus(message) } }
 
     fun open() {
         if (!textureView.isAvailable) { textureView.surfaceTextureListener = listener; return }
         handler.post {
             try {
-                if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) { onStatus("Camera permission is required"); return@post }
+                if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) { status("Camera permission is required"); return@post }
                 manager.openCamera(cameraId, callback, handler)
-            } catch (e: Exception) { onStatus("Camera open failed: ${e.message}") }
+            } catch (e: Exception) { status("Camera open failed: ${e.message}") }
         }
     }
 
-    fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { onStatus("Capture failed: ${e.message}") } } }
+    fun capture() { handler.post { try { val c = camera ?: return@post; val s = session ?: return@post; val request = c.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply { addTarget(reader!!.surface); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation()) }.build(); s.capture(request, null, handler) } catch (e: Exception) { status("Capture failed: ${e.message}") } } }
 
-    fun close() { handler.post { session?.close(); camera?.close(); reader?.close(); session = null; camera = null; reader = null }; thread.quitSafely() }
+    fun close() { closed = true; handler.post { session?.close(); camera?.close(); reader?.close(); session = null; camera = null; reader = null }; thread.quitSafely() }
 
     private val listener = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) { open() }
@@ -50,20 +55,24 @@ class Camera2CaptureController(private val context: Context, private val texture
 
     private val callback = object : CameraDevice.StateCallback() {
         override fun onOpened(device: CameraDevice) { camera = device; createSession(device) }
-        override fun onDisconnected(device: CameraDevice) { device.close(); onStatus("Camera disconnected") }
-        override fun onError(device: CameraDevice, error: Int) { device.close(); onStatus("Camera error $error") }
+        override fun onDisconnected(device: CameraDevice) { device.close(); status("Camera disconnected") }
+        override fun onError(device: CameraDevice, error: Int) { device.close(); status("Camera error $error") }
     }
 
     private fun createSession(device: CameraDevice) {
         val texture = textureView.surfaceTexture ?: return
-        texture.setDefaultBufferSize(textureView.width.coerceAtLeast(640), textureView.height.coerceAtLeast(480))
+        val characteristics = manager.getCameraCharacteristics(cameraId)
+        val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        val previewSize = map?.getOutputSizes(android.graphics.SurfaceTexture::class.java)?.filter { it.width <= 1920 && it.height <= 1080 }?.maxByOrNull { it.width.toLong() * it.height } ?: android.util.Size(1280, 720)
+        val jpegSize = map?.getOutputSizes(android.graphics.ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height } ?: android.util.Size(640, 480)
+        texture.setDefaultBufferSize(previewSize.width, previewSize.height)
         val preview = Surface(texture)
-        reader = ImageReader.newInstance(4064, 3048, android.graphics.ImageFormat.JPEG, 2).also { imageReader ->
+        reader = ImageReader.newInstance(jpegSize.width, jpegSize.height, android.graphics.ImageFormat.JPEG, 2).also { imageReader ->
             imageReader.setOnImageAvailableListener({ source -> source.acquireNextImage()?.use { image -> saveJpeg(image.planes[0].buffer) } }, handler)
         }
         device.createCaptureSession(listOf(preview, reader!!.surface), object : CameraCaptureSession.StateCallback() {
-            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); onStatus("Camera $cameraId preview ready") }
-            override fun onConfigureFailed(value: CameraCaptureSession) { onStatus("Camera session configuration failed") }
+            override fun onConfigured(value: CameraCaptureSession) { session = value; previewRequest = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(preview); set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); val afModes = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)?.toSet().orEmpty(); if (afModes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) }.build(); value.setRepeatingRequest(previewRequest!!, null, handler); status("Camera $cameraId preview ready · ${jpegSize.width}×${jpegSize.height}") }
+            override fun onConfigureFailed(value: CameraCaptureSession) { status("Camera $cameraId session configuration failed") }
         }, handler)
     }
 

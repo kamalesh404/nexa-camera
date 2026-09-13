@@ -19,12 +19,14 @@ fun CameraPreviewScreen(onBack: () -> Unit) {
     DisposableEffect(selectedCamera) { onDispose { controller?.close(); controller = null } }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         key(selectedCamera) { AndroidView(factory = { context -> TextureView(context).also { view -> controller = Camera2CaptureController(context, view, selectedCamera) { message -> status = message }; controller?.open() } }, modifier = Modifier.fillMaxSize()) }
-        Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(status, color = Color.White, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 OutlinedButton(onClick = { selectedCamera = "0" }) { Text("Rear") }
                 OutlinedButton(onClick = { selectedCamera = "1" }) { Text("Front") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 OutlinedButton(onClick = onBack) { Text("Back") }
                 Button(onClick = { controller?.capture() }) { Text("Capture JPEG") }
             }
