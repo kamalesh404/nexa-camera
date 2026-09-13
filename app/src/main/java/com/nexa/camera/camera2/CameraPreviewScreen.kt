@@ -72,7 +72,7 @@ fun CameraPreviewScreen(onBack: () -> Unit) {
                         FilterChip(selected = manualFocus, onClick = { manualFocus = !manualFocus; controller?.setManualFocus(manualFocus) }, label = { Text(if (manualFocus) "Focus Manual" else "Focus Auto") })
                         if (manualFocus) {
                             TextButton(onClick = { focusDistance = (focusDistance - 0.5f).coerceAtLeast(0f); controller?.setFocusDistance(focusDistance) }) { Text("Focus −") }
-                            Text("${"%.1f".format(focusDistance)}m", color = Color.White)
+                            Text("${"%.1f".format(focusDistance)}D", color = Color.White)
                             TextButton(onClick = { focusDistance = (focusDistance + 0.5f).coerceAtMost(20f); controller?.setFocusDistance(focusDistance) }) { Text("Focus +") }
                         }
                     }
