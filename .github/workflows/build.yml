@@ -14,5 +14,5 @@ jobs:
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.30.5"
       - name: Build and test
         run: gradle testDebugUnitTest assembleDebug
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: app-debug, path: app/build/outputs/apk/debug/app-debug.apk }
